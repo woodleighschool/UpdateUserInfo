@@ -244,16 +244,27 @@ class UpdateUserInfo:
 		
 		endpoint = 'v1/computers-inventory-detail' if device.deviceType == 'macOS' else 'v2/mobile-devices'
 
-		payload = {
-			'userAndLocation': {
-				'username': device.ldapUser.username,
-				'realname': device.ldapUser.real_name,
-				'email': device.ldapUser.email,
-				'departmentId': device.ldapUser.department,
-				'buildingId': device.ldapUser.building
+		if device.deviceType == 'macOS':
+			payload = {
+				'userAndLocation': {
+					'username': device.ldapUser.username,
+					'realname': device.ldapUser.real_name,
+					'email': device.ldapUser.email,
+					'departmentId': device.ldapUser.department,
+					'buildingId': device.ldapUser.building
+				}
 			}
-		}
-
+		else:
+			payload = {
+				'location': {
+					'username': device.ldapUser.username,
+					'realName': device.ldapUser.real_name,
+					'emailAddress': device.ldapUser.email,
+					'departmentId': device.ldapUser.department,
+					'buildingId': device.ldapUser.building
+				}
+			}
+		
 		if not self.dry_run:
 			response = requests.patch(f'https://{self.jamf_host}/api/{endpoint}/{device.id}', headers=headers, json=payload)
 			response.raise_for_status()
