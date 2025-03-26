@@ -96,13 +96,14 @@ class User:
 				return False
 
 class UpdateUserInfo:
-	def __init__(self, host, jamf_client_id, jamf_client_secret, ldap_host, ldap_username, ldap_credentials):
+	def __init__(self, host, jamf_client_id, jamf_client_secret, ldap_host, ldap_username, ldap_credentials, dry_run):
 		self.jamf_host = host
 		self.jamf_client_id = jamf_client_id
 		self.jamf_client_secret = jamf_client_secret
 		self.ldap_host = ldap_host
 		self.ldap_username = ldap_username
 		self.ldap_credentials = ldap_credentials
+		self.dry_run = dry_run
 		self.__connnect_to_ldap__()
 		self.__authenticate_jamf_api__()
 		logging.info('Initialized service')
@@ -253,9 +254,10 @@ class UpdateUserInfo:
 			}
 		}
 
-		response = requests.patch(f'https://{self.jamf_host}/api/{endpoint}/{device.id}', headers=headers, json=payload)
-		response.raise_for_status()
-		logging.info(f'Moved {device.name} to deparment {department} and building {building}')
+		if not self.dryrun:
+			response = requests.patch(f'https://{self.jamf_host}/api/{endpoint}/{device.id}', headers=headers, json=payload)
+			response.raise_for_status()
+		logging.info(f'Moved {device.name} to department {department} and building {building}')
 		
 	def getLDAPDetails(self, device):
 		self.ldap_connection.search('dc=woodleighschool,dc=net', f'(samAccountName={device.jamfUser.username})', attributes=['name', 'mail', 'samAccountName', 'userAccountControl', 'department', 'Campus'])
@@ -297,7 +299,8 @@ def main():
 	ldap_credentials = os.getenv('LDAP_CREDENTIALS', '')
 	ldap_host = os.getenv('LDAP_HOST', '')
 	update_now = os.getenv('UPDATE_NOW', 'false').lower() == 'true'
-	update = UpdateUserInfo(jamf_host, jamf_client_id, jamf_client_secret, ldap_host, ldap_username, ldap_credentials)
+	dry_run = os.getenv('DRY_RUN', 'false') == 'true'
+	update = UpdateUserInfo(jamf_host, jamf_client_id, jamf_client_secret, ldap_host, ldap_username, ldap_credentials, dry_run)
 	if update_now:
 		logging.info('Running update immediately due to UPDATE_NOW setting')
 		update.update()
