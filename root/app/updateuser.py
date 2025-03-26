@@ -242,7 +242,7 @@ class UpdateUserInfo:
 			'Authorization': f'Bearer {self.jamf_access_token}'
 		}
 		
-		endpoint = 'v1/computers-inventory-detail/' if device.deviceType == 'macOS' else 'v2/mobile-devices/'
+		endpoint = 'v1/computers-inventory-detail' if device.deviceType == 'macOS' else 'v2/mobile-devices'
 
 		payload = {
 			'userAndLocation': {
