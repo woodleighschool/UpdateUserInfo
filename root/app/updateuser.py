@@ -254,7 +254,7 @@ class UpdateUserInfo:
 			}
 		}
 
-		if not self.dryrun:
+		if not self.dry_run:
 			response = requests.patch(f'https://{self.jamf_host}/api/{endpoint}/{device.id}', headers=headers, json=payload)
 			response.raise_for_status()
 		logging.info(f'Moved {device.name} to department {department} and building {building}')
