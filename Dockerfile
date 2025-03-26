@@ -9,7 +9,6 @@ RUN \
     python3 \
 	py3-apscheduler \
 	py3-requests \
-#	py3-debugpy \
 	py3-ldap3
 
 # copy local files

@@ -3,7 +3,6 @@ import time
 import base64
 import logging
 import os
-import debugpy
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -74,12 +73,12 @@ class User:
 			if buildingID in buildings.keys():
 				self.building = buildingID
 			else:
-				self.building = -1
+				self.building = '-1'
 			
 			if departmentID in departments.keys():
 				self.department = departmentID
 			else:
-				self.department = -1
+				self.department = '-1'
 		self.username = username
 		self.real_name = real_name
 		self.email = email
@@ -254,8 +253,8 @@ class UpdateUserInfo:
 			}
 		}
 
-	#	response = requests.patch(f'https://{self.jamf_host}/api/{endpoint}/{device.id}', headers=headers, json=payload)
-	#	response.raise_for_status()
+		response = requests.patch(f'https://{self.jamf_host}/api/{endpoint}/{device.id}', headers=headers, json=payload)
+		response.raise_for_status()
 		logging.info(f'Moved {device.name} to deparment {department} and building {building}')
 		
 	def getLDAPDetails(self, device):
