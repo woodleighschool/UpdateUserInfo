@@ -304,18 +304,17 @@ def main():
 	if update_now:
 		logging.info('Running update immediately due to UPDATE_NOW setting')
 		update.update()
-	else:
-		cron_schedule = os.getenv('UPDATE_SCHEDULE', '0 0 * * *')
-		scheduler = BackgroundScheduler()
-		scheduler.add_job(update.update, CronTrigger.from_crontab(cron_schedule))
-		scheduler.start()
-		logging.info(f'Scheduled update with cron: {cron_schedule}')
-		try:
-			while True:
-				time.sleep(10)
-		except (KeyboardInterrupt, SystemExit):
-			logging.info('Scheduler shutdown initiated')
-			scheduler.shutdown()
+	cron_schedule = os.getenv('UPDATE_SCHEDULE', '0 0 * * *')
+	scheduler = BackgroundScheduler()
+	scheduler.add_job(update.update, CronTrigger.from_crontab(cron_schedule))
+	scheduler.start()
+	logging.info(f'Scheduled update with cron: {cron_schedule}')
+	try:
+		while True:
+			time.sleep(10)
+	except (KeyboardInterrupt, SystemExit):
+		logging.info('Scheduler shutdown initiated')
+		scheduler.shutdown()
 
 if __name__ == '__main__':
 	main()
