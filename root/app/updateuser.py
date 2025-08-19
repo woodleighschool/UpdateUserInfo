@@ -227,6 +227,9 @@ class UpdateUserInfo:
 	def updateUser(self, device):
 		self.__check_token__()
 
+		if device.id == '2204':
+			print("Wahoo")
+
 		try:
 			building = buildings[device.ldapUser.building]
 		except KeyError:
@@ -297,8 +300,11 @@ class UpdateUserInfo:
 		devices.extend(self.getAlliOSDevices())
 
 		for device in devices:
-			if device.needsToUpdate():
-				self.updateUser(device)
+			try:
+				if device.needsToUpdate():
+					self.updateUser(device)
+			except requests.exceptions.HTTPError as E:
+				logging.error(f"Error updating {device.name}, skipping over - {E}")
 
 
 def main():
