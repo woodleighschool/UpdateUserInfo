@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "updateuserinfo"
+version = "1.0.0"
+description = "Updates user information in Jamf Pro based on attributes from Windows Active Directory"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "ozpinbeacon" }, { name = "hydazz" }]
+keywords = ["jamf", "ldap", "macos", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+]
+dependencies = ["requests", "ldap3", "APScheduler"]
+
+[project.scripts]
+updateuserinfo = "updateuserinfo:main"
+
+[project.urls]
+Homepage = "https://github.com/woodleighschool/UpdateUserInfo"
+Repository = "https://github.com/woodleighschool/UpdateUserInfo"
+Issues = "https://github.com/woodleighschool/UpdateUserInfo/issues"
+
+[tool.setuptools]
+py-modules = ["setrecoverypassword"]
