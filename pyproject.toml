@@ -36,4 +36,4 @@ Repository = "https://github.com/woodleighschool/UpdateUserInfo"
 Issues = "https://github.com/woodleighschool/UpdateUserInfo/issues"
 
 [tool.setuptools]
-py-modules = ["setrecoverypassword"]
+py-modules = ["updateuserinfo"]
