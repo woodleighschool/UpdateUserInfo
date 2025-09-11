@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "updateuserinfo"
-version = "2.0.6"
+version = "2.0.7"
 description = "Updates user information in Jamf Pro based on attributes from Windows Active Directory"
 readme = "README.md"
 requires-python = ">=3.8"
