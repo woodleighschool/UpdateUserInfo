@@ -3,6 +3,7 @@ import time
 import base64
 import logging
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -308,6 +309,53 @@ class UpdateUserInfo:
 
 
 def main():
+		# Check for help flag
+	if len(sys.argv) > 1 and sys.argv[1] in ['--help', '-h', 'help']:
+		print("""
+UpdateUserInfo - Jamf Pro <-> Windows AD sync tool
+
+DESCRIPTION:
+	Synchronizes information from Windows Active Directory to Jamf Pro
+
+USAGE:
+	updateuserinfo [--help]
+
+ENVIRONMENT VARIABLES:
+	JAMF_HOST:			Your Jamf Pro server hostname (required)
+	JAMF_CLIENT_ID: 	OAuth2 client ID (required)
+	JAMF_CLIENT_SECRET:	OAuth2 client secret (required)
+	LDAP_HOST:			Your Windows Active Directory host (required)
+	LDAP_USERNAME:		Windows Active Direcory account with permission to read User objects (required)
+	LDAP_CREDENTIALS:	Password for the above account, encoded in base64 (required)
+	UPDATE_NOW:			Run update immediately (true/false, default: false)
+	UPDATE_SCHEDULE:	Cron schedule for updates (default: "0 0 * * *")
+	DRY_RUN           Run without making changes (true/false, default: false)
+
+EXAMPLES:
+	# Run once immediately
+	JAMF_HOST="jamf.example.com" \\
+	JAMF_CLIENT_ID="client-id" \\
+	JAMF_CLIENT_SECRET="secret" \\
+	LDAP_HOST="dc.example.net" \\
+	LDAP_USERNAME="DOMAIN\User" \\
+	LDAP_CREDENTIALS="ZXhhbXBsZQo=" \\
+	UPDATE_NOW="true" \\
+	updateuserinfo
+	
+	# Run with scheduled updates (daily at 2am)
+	JAMF_HOST="jamf.example.com" \\
+	JAMF_CLIENT_ID="client-id" \\
+	JAMF_CLIENT_SECRET="secret" \\
+	LDAP_HOST="dc.example.net" \\
+	LDAP_USERNAME="DOMAIN\User" \\
+	LDAP_CREDENTIALS="ZXhhbXBsZQo=" \\
+	UPDATE_SCHEDULE="0 2 * * *" \\
+	updateuserinfo
+	
+	For more information, visit: https://github.com/woodleighschool/UpdateUserInfo
+	""")
+		return
+	
 	logging.info('Script started')
 	jamf_client_id = os.getenv('JAMF_CLIENT_ID', '')
 	jamf_client_secret = os.getenv('JAMF_CLIENT_SECRET', '')
