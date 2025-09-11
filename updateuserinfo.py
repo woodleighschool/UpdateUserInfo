@@ -311,7 +311,7 @@ class UpdateUserInfo:
 def main():
 		# Check for help flag
 	if len(sys.argv) > 1 and sys.argv[1] in ['--help', '-h', 'help']:
-		print("""
+		print(r"""
 UpdateUserInfo - Jamf Pro <-> Windows AD sync tool
 
 DESCRIPTION:
