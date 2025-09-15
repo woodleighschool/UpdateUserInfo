@@ -306,6 +306,8 @@ class UpdateUserInfo:
 					self.updateUser(device)
 			except requests.exceptions.HTTPError as E:
 				logging.error(f"Error updating {device.name}, skipping over - {E}")
+		
+		logging.info("All devices synced with Active Directory")
 
 
 def main():
