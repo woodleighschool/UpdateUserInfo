@@ -140,7 +140,7 @@ func runSync() error {
 		}
 	}()
 
-	syncService := sync.NewService(jamfClient, logger)
+	syncService := sync.NewService(jamfClient, cfg, logger)
 
 	if cfg.IsOneshot() {
 		logger.Info("Running sync once (oneshot mode)")
