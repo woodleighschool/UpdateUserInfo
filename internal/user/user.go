@@ -20,66 +20,106 @@ type LDAPClient struct {
 }
 
 type User struct {
-	Disabled     bool   `json:"disabled"`
-	Username     string `json:"username"`
-	Building     string `json:"building"`
-	BuildingID   string `json:"buildingId"`
-	Department   string `json:"department"`
-	DepartmentID string `json:"departmentId"`
-	RealName     string `json:"real_name"`
-	Email        string `json:"email"`
+	Disabled     bool    `json:"disabled"`
+	Username     string  `json:"username"`
+	Building     string  `json:"building"`
+	BuildingID   *string `json:"buildingId,omitempty"`
+	Department   string  `json:"department"`
+	DepartmentID *string `json:"departmentId,omitempty"`
+	RealName     *string `json:"real_name,omitempty"`
+	Email        *string `json:"email,omitempty"`
 }
 
 func (u *User) Equals(other *User) bool {
-	if u.BuildingID == other.BuildingID && u.DepartmentID == other.DepartmentID && u.Username == other.Username && u.RealName == other.RealName && u.Email == other.Email {
-		return true
-	} else {
+	if u.BuildingID != nil && other.BuildingID != nil {
+		if *u.BuildingID != *other.BuildingID {
+			return false
+		}
+	}
+
+	if u.DepartmentID != nil && other.DepartmentID != nil {
+		if *u.DepartmentID != *other.DepartmentID {
+			return false
+		}
+	}
+
+	if u.Username != other.Username {
 		return false
 	}
-}
 
-func (l *LDAPClient) LookupBuildingDepartment(user *User) error {
-	if user.Building != "" && user.Department != "" && user.BuildingID == "" && user.DepartmentID == "" {
-		user.BuildingID = l.Config.JamfBuildings[user.Building]
-		user.DepartmentID = l.Config.JamfDepartments[user.Department]
-		return nil
-	} else if user.Building == "" && user.Department == "" && user.BuildingID != "" && user.DepartmentID != "" {
-		user.Building = reverseMapLookup(l.Config.JamfBuildings, user.BuildingID)
-		user.Department = reverseMapLookup(l.Config.JamfDepartments, user.DepartmentID)
-		return nil
-	} else {
-		return fmt.Errorf("User instance in unrecoverable state")
+	if u.RealName != nil && other.RealName != nil {
+		if *u.RealName != *other.RealName {
+			return false
+		}
 	}
+
+	if u.Email != nil && other.Email != nil {
+		if *u.Email != *other.Email {
+			return false
+		}
+	}
+
+	return true
 }
 
-func (l *LDAPClient) CreateUserFromComputer(username string, buildingID string, departmentID string, realName string, email string) (*User, error) {
+func (l *LDAPClient) LookupLocationInfoFromID(user *User) error {
+	if user.BuildingID == nil {
+		user.Building = "No building"
+	} else {
+		building, err := l.Config.GetBuildingFromID(*user.BuildingID)
+		if err != nil {
+			return fmt.Errorf("%w", err)
+		}
+		user.Building = building.Name
+	}
+	if user.DepartmentID == nil {
+		user.Department = "No department"
+	} else {
+		department, err := l.Config.GetDepartmentFromID(*user.DepartmentID)
+		if err != nil {
+			return fmt.Errorf("%w", err)
+		}
+		user.Department = department.Name
+	}
+
+	return nil
+}
+
+func (l *LDAPClient) LookupLocationInfoFromName(user *User) error {
+	if user.Building == "" {
+		user.BuildingID = nil
+	} else {
+		building, err := l.Config.GetBuildingFromName(user.Building)
+		if err != nil {
+			return fmt.Errorf("%w", err)
+		}
+		user.BuildingID = &building.ID
+	}
+	if user.Department == "" {
+		user.DepartmentID = nil
+	} else {
+		department, err := l.Config.GetDepartmentFromName(user.Department)
+		if err != nil {
+			return fmt.Errorf("%w", err)
+		}
+		user.DepartmentID = &department.ID
+	}
+
+	return nil
+}
+
+func (l *LDAPClient) CreateUserFromJamf(username *string, buildingID *string, departmentID *string, realName *string, email *string) (*User, error) {
 	user := User{
-		Username:     username,
+		Username:     *username,
 		BuildingID:   buildingID,
 		DepartmentID: departmentID,
 		RealName:     realName,
 		Email:        email,
 	}
-	err := l.LookupBuildingDepartment(&user)
+	err := l.LookupLocationInfoFromID(&user)
 	if err != nil {
 		l.Logger.Error("Unable to fill out building/department information for user", "user", username, "buildingID", buildingID, "departmentID", departmentID)
-		return nil, fmt.Errorf("Unable to create user")
-	}
-	return &user, nil
-}
-
-func (l *LDAPClient) CreateUserFromMobileDevice(username string, building string, department string, realName string, email string) (*User, error) {
-	user := User{
-		Username:   username,
-		Building:   building,
-		Department: department,
-		RealName:   realName,
-		Email:      email,
-	}
-	err := l.LookupBuildingDepartment(&user)
-	if err != nil {
-		l.Logger.Error("Unable to fill out building/department information for user", "user", username, "building", building, "department", department)
-		return nil, fmt.Errorf("Unable to create user")
+		return nil, fmt.Errorf("unable to create user")
 	}
 	return &user, nil
 }
@@ -93,13 +133,13 @@ func (l *LDAPClient) CreateUserFromLDAP(username string, building string, depart
 		Username:   username,
 		Building:   building,
 		Department: department,
-		RealName:   realName,
-		Email:      email,
+		RealName:   &realName,
+		Email:      &email,
 	}
-	err := l.LookupBuildingDepartment(&user)
+	err := l.LookupLocationInfoFromName(&user)
 	if err != nil {
 		l.Logger.Error("Unable to fill out building/department information for user", "user", username, "building", building, "department", department)
-		return nil, fmt.Errorf("Unable to create user")
+		return nil, fmt.Errorf("unable to create user")
 	}
 	return &user, nil
 }
@@ -108,13 +148,13 @@ func CreateLDAPClient(cfg *config.Config, logger *slog.Logger) (*LDAPClient, err
 	l, err := ldap.DialURL(cfg.LDAPHost)
 	if err != nil {
 		logger.Error("Unable to connect to Active Directory server", "server", cfg.LDAPHost)
-		return nil, fmt.Errorf("Unable to create LDAP client")
+		return nil, fmt.Errorf("unable to create LDAP client")
 	}
 
 	err = l.Bind(cfg.LDAPUsername, cfg.LDAPCredentials)
 	if err != nil {
 		logger.Error("Unable to bind to Active Directory with provided credentials")
-		return nil, fmt.Errorf("Unable to create LDAP client")
+		return nil, fmt.Errorf("unable to create LDAP client")
 	}
 
 	return &LDAPClient{
@@ -136,14 +176,14 @@ func (l *LDAPClient) GetUserInfo(username string) (*User, error) {
 	)
 
 	results, err := l.Client.Search(searchRequest)
-	if err != nil {
-		return nil, fmt.Errorf("Error looking up user in Active Directory")
+	if err != nil || len(results.Entries) == 0 {
+		return nil, fmt.Errorf("error looking up user in Active Directory")
 	}
 
 	userDisabled := false
 	userAccountControl, err := strconv.ParseInt(results.Entries[0].GetAttributeValue("userAccountControl"), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to convert userAccountControl to int64")
+		return nil, fmt.Errorf("unable to convert userAccountControl to int64")
 	}
 	if userAccountControl&disabledBit != 0 {
 		userDisabled = true
@@ -158,13 +198,4 @@ func (l *LDAPClient) GetUserInfo(username string) (*User, error) {
 		return nil, err
 	}
 	return user, nil
-}
-
-func reverseMapLookup(dataMap map[string]string, valueToFind string) string {
-	for key, value := range dataMap {
-		if valueToFind == value {
-			return key
-		}
-	}
-	return ""
 }

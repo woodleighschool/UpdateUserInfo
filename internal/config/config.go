@@ -10,15 +10,16 @@ import (
 )
 
 type Config struct {
-	InstanceDomain           string `mapstructure:"instance_domain"`
-	ClientID                 string `mapstructure:"client_id"`
-	ClientSecret             string `mapstructure:"client_secret"`
-	AuthMethod               string `mapstructure:"auth_method"`
-	TokenRefreshBufferPeriod string `mapstructure:"token_refresh_buffer_period_seconds"`
-	TokenBufferPeriod        string `mapstructure:"token_buffer_period_seconds"`
+	InstanceDomain           string   `mapstructure:"instance_domain"`
+	ClientID                 string   `mapstructure:"client_id"`
+	ClientSecret             string   `mapstructure:"client_secret"`
+	AuthMethod               string   `mapstructure:"auth_method"`
+	TokenRefreshBufferPeriod string   `mapstructure:"token_refresh_buffer_period_seconds"`
+	TokenBufferPeriod        string   `mapstructure:"token_buffer_period_seconds"`
+	UsersToIgnore            []string `mapstructure:"users_to_ignore"`
 
-	JamfDepartments map[string]string `mapstructure:"departments"`
-	JamfBuildings   map[string]string `mapstructure:"buildings"`
+	JamfDepartments []JamfStructure `mapstructure:"departments"`
+	JamfBuildings   []JamfStructure `mapstructure:"buildings"`
 
 	LDAPHost        string `mapstructure:"ldap_host"`
 	LDAPUsername    string `mapstructure:"ldap_username"`
@@ -27,6 +28,11 @@ type Config struct {
 	SyncSchedule string `mapstructure:"sync_schedule"`
 	LogLevel     string `mapstructure:"log_level"`
 	DryRun       bool   `mapstructure:"dry_run"`
+}
+
+type JamfStructure struct {
+	Name string `mapstructure:"name"`
+	ID   string `mapstructure:"id"`
 }
 
 func Load() (*Config, error) {
@@ -80,8 +86,8 @@ func (c *Config) validate() error {
 	if c.LDAPUsername == "" {
 		errors = append(errors, "LDAP_USERNAME is required")
 	} else {
-		if !strings.Contains(c.LDAPUsername, `\\`) {
-			errors = append(errors, `LDAP_USERNAME must be in the format 'domain\\username'`)
+		if !strings.Contains(c.LDAPUsername, `\`) {
+			errors = append(errors, `LDAP_USERNAME must be in the format 'domain\username'`)
 		}
 	}
 	if c.LDAPCredentials == "" {
@@ -112,6 +118,42 @@ func (c *Config) validate() error {
 	}
 
 	return nil
+}
+
+func (c *Config) GetDepartmentFromID(id string) (*JamfStructure, error) {
+	for i := 0; i < len(c.JamfDepartments); i++ {
+		if id == c.JamfDepartments[i].ID {
+			return &c.JamfDepartments[i], nil
+		}
+	}
+	return nil, fmt.Errorf("department not found: %s", id)
+}
+
+func (c *Config) GetDepartmentFromName(name string) (*JamfStructure, error) {
+	for i := 0; i < len(c.JamfDepartments); i++ {
+		if name == c.JamfDepartments[i].Name {
+			return &c.JamfDepartments[i], nil
+		}
+	}
+	return nil, fmt.Errorf("department not found: %s", name)
+}
+
+func (c *Config) GetBuildingFromID(id string) (*JamfStructure, error) {
+	for i := 0; i < len(c.JamfBuildings); i++ {
+		if id == c.JamfBuildings[i].ID {
+			return &c.JamfBuildings[i], nil
+		}
+	}
+	return nil, fmt.Errorf("building not found: %s", id)
+}
+
+func (c *Config) GetBuildingFromName(name string) (*JamfStructure, error) {
+	for i := 0; i < len(c.JamfBuildings); i++ {
+		if name == c.JamfBuildings[i].Name {
+			return &c.JamfBuildings[i], nil
+		}
+	}
+	return nil, fmt.Errorf("building not found: %s", name)
 }
 
 func (c *Config) GetLogLevel() slog.Level {

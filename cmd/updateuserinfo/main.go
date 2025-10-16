@@ -44,20 +44,10 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	viper.AutomaticEnv()
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-
-	viper.SetConfigName("jamf_const")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath("/config/")
-	err := viper.ReadInConfig()
-	if err != nil {
-		panic(fmt.Sprintf("failed to load yaml file: %v", err))
-	}
-
 	flags := cmd.Flags()
 	flags.String("schedule", "", "cron schedule expression for automatic sync (e.g., '0 2 * * *' for daily at 2 AM)")
 	flags.String("log-level", "info", "logging level: debug, info, warn, error")
+	flags.String("users-to-ignore", "", "comma separated list of usernames to ignore when updating")
 	flags.String("instance-domain", "", "Jamf Pro host (can also use JAMF_HOST env var)")
 	flags.String("client-id", "", "Jamf Pro API client id (can also use JAMF_CLIENT_ID env var)")
 	flags.String("client-secret", "", "Jamf Pro API client secret (can also use JAMF_CLIENT_SECRET env var)")
@@ -66,33 +56,39 @@ func newRootCmd() *cobra.Command {
 	flags.String("ldap-credentials", "", "Windows Active Directory password (can also use LDAP_CREDENTIALS env var)")
 	flags.String("dry-run", "false", "Run without making any permanent changes")
 
-	if err := viper.BindPFlag("instance-domain", flags.Lookup("instance-domain")); err != nil {
+	if err := viper.BindPFlag("users_to_ignore", flags.Lookup("users-to-ignore")); err != nil {
+		panic(fmt.Sprintf("failed to bind users-to-ignore flag: %v", err))
+	}
+	if err := viper.BindPFlag("instance_domain", flags.Lookup("instance-domain")); err != nil {
 		panic(fmt.Sprintf("failed to bind instance-domain flag: %v", err))
 	}
-	if err := viper.BindPFlag("client-id", flags.Lookup("client-id")); err != nil {
+	if err := viper.BindPFlag("client_id", flags.Lookup("client-id")); err != nil {
 		panic(fmt.Sprintf("failed to bind client-id flag: %v", err))
 	}
-	if err := viper.BindPFlag("client-secret", flags.Lookup("client-secret")); err != nil {
+	if err := viper.BindPFlag("client_secret", flags.Lookup("client-secret")); err != nil {
 		panic(fmt.Sprintf("failed to bind client-secret flag: %v", err))
 	}
-	if err := viper.BindPFlag("ldap-host", flags.Lookup("ldap-host")); err != nil {
+	if err := viper.BindPFlag("ldap_host", flags.Lookup("ldap-host")); err != nil {
 		panic(fmt.Sprintf("failed to bind ldap-host flag: %v", err))
 	}
-	if err := viper.BindPFlag("ldap-username", flags.Lookup("ldap-username")); err != nil {
+	if err := viper.BindPFlag("ldap_username", flags.Lookup("ldap-username")); err != nil {
 		panic(fmt.Sprintf("failed to bind ldap-username flag: %v", err))
 	}
-	if err := viper.BindPFlag("ldap-credentials", flags.Lookup("ldap-credentials")); err != nil {
+	if err := viper.BindPFlag("ldap_credentials", flags.Lookup("ldap-credentials")); err != nil {
 		panic(fmt.Sprintf("failed to bind ldap-credentials flag: %v", err))
 	}
 	if err := viper.BindPFlag("schedule", flags.Lookup("schedule")); err != nil {
 		panic(fmt.Sprintf("failed to bind schedule flag: %v", err))
 	}
-	if err := viper.BindPFlag("log-level", flags.Lookup("log-level")); err != nil {
+	if err := viper.BindPFlag("log_level", flags.Lookup("log-level")); err != nil {
 		panic(fmt.Sprintf("failed to bind log-level flag: %v", err))
 	}
-	if err := viper.BindPFlag("dry-run", flags.Lookup("dry-run")); err != nil {
+	if err := viper.BindPFlag("dry_run", flags.Lookup("dry-run")); err != nil {
 		panic(fmt.Sprintf("failed to bind dry-run flag: %v", err))
 	}
+
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
 	cmd.AddCommand(newVersionCmd())
 
@@ -139,6 +135,17 @@ func runSync() error {
 			logger.Warn("failed to close Jamf client", "error", closeErr)
 		}
 	}()
+	buildings, err := jamfClient.GetBuildings()
+	if err != nil {
+		return fmt.Errorf("unable to get buildings from Jamf API: %w", err)
+	}
+	cfg.JamfBuildings = buildings
+
+	departments, err := jamfClient.GetDepartments()
+	if err != nil {
+		return fmt.Errorf("unable to get departments from Jamf API: %w", err)
+	}
+	cfg.JamfDepartments = departments
 
 	syncService := sync.NewService(jamfClient, cfg, logger)
 

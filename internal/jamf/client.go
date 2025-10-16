@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/deploymenttheory/go-api-sdk-jamfpro/sdk/jamfpro"
 	"github.com/woodleighschool/UpdateUserInfo/internal/config"
 	"github.com/woodleighschool/UpdateUserInfo/internal/user"
+	"github.com/woodleighschool/go-api-sdk-jamfpro/sdk/jamfpro"
 )
 
 type Device struct {
@@ -20,6 +20,8 @@ type Device struct {
 }
 
 type Client interface {
+	GetBuildings() ([]config.JamfStructure, error)
+	GetDepartments() ([]config.JamfStructure, error)
 	GetComputers() ([]Device, error)
 	GetMobileDevices() ([]Device, error)
 	UpdateComputer(*Device, bool) error
@@ -29,6 +31,7 @@ type Client interface {
 
 type jamfClient struct {
 	client     *jamfpro.Client
+	config     *config.Config
 	ldapClient *user.LDAPClient
 	logger     *slog.Logger
 }
@@ -64,9 +67,57 @@ func NewClient(cfg *config.Config, logLevel string, logger *slog.Logger, ldapCli
 
 	return &jamfClient{
 		client:     client,
+		config:     cfg,
 		logger:     logger,
 		ldapClient: ldapClient,
 	}, nil
+}
+
+func (j *jamfClient) GetDepartments() ([]config.JamfStructure, error) {
+	var departments []config.JamfStructure
+
+	resp, err := j.client.GetDepartments(url.Values{})
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+
+	for _, value := range resp.Results {
+		departments = append(departments, config.JamfStructure{
+			ID:   value.ID,
+			Name: value.Name,
+		})
+	}
+
+	departments = append(departments, config.JamfStructure{
+		ID:   "-1",
+		Name: "No department",
+	})
+
+	return departments, nil
+}
+
+func (j *jamfClient) GetBuildings() ([]config.JamfStructure, error) {
+	var buildings []config.JamfStructure
+
+	resp, err := j.client.GetBuildings(url.Values{})
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+
+	for _, value := range resp.Results {
+		buildings = append(buildings, config.JamfStructure{
+			ID:   value.ID,
+			Name: value.Name,
+		})
+	}
+
+	buildings = append(buildings, config.JamfStructure{
+		ID:   "-1",
+		Name: "No building",
+	})
+
+	j.config.JamfBuildings = buildings
+	return buildings, nil
 }
 
 func (j *jamfClient) GetComputers() ([]Device, error) {
@@ -74,7 +125,9 @@ func (j *jamfClient) GetComputers() ([]Device, error) {
 
 	params := url.Values{}
 	params.Set("page-size", "5000")
-	params.Set("filter", "managed==true")
+	params.Set("section", "GENERAL")
+	params.Add("section", "USER_AND_LOCATION")
+	params.Set("filter", "general.remoteManagement.managed==true")
 
 	resp, err := j.client.GetComputersInventory(params)
 	if err != nil {
@@ -85,11 +138,12 @@ func (j *jamfClient) GetComputers() ([]Device, error) {
 	var computers []Device
 	for i := 0; i < resp.TotalCount; i++ {
 		deviceResp := resp.Results[i]
-		if deviceResp.UserAndLocation.Username == "" {
-			j.logger.Info("No user associated with device, skipping over", "device", deviceResp.General.Name)
+		if deviceResp.UserAndLocation.Username == nil {
+			j.logger.Debug("No user associated with device, skipping over", "device", deviceResp.General.Name)
+			continue
 		}
 
-		jamfUser, err := j.ldapClient.CreateUserFromMobileDevice(
+		jamfUser, err := j.ldapClient.CreateUserFromJamf(
 			deviceResp.UserAndLocation.Username,
 			deviceResp.UserAndLocation.BuildingId,
 			deviceResp.UserAndLocation.DepartmentId,
@@ -98,18 +152,19 @@ func (j *jamfClient) GetComputers() ([]Device, error) {
 		)
 		if err != nil {
 			j.logger.Error("Unable to check device", "device", deviceResp.General.Name, "error", err)
+			continue
 		}
 
-		ldapDetails, err := j.ldapClient.GetUserInfo(deviceResp.UserAndLocation.Username)
+		ldapDetails, err := j.ldapClient.GetUserInfo(*deviceResp.UserAndLocation.Username)
 		if err != nil {
-			j.logger.Error("Error getting details from Active Directory for user", "user", deviceResp.UserAndLocation.Username)
+			j.logger.Warn("Unable to get details from Active Directory for user", "user", deviceResp.UserAndLocation.Username)
 			continue
 		}
 
 		device := Device{
-			ID:         deviceResp.ID,
+			ID:         *deviceResp.ID,
 			DeviceType: "macOS",
-			Name:       deviceResp.General.Name,
+			Name:       *deviceResp.General.Name,
 			JamfUser:   jamfUser,
 			LDAPUser:   ldapDetails,
 		}
@@ -123,53 +178,48 @@ func (j *jamfClient) GetComputers() ([]Device, error) {
 func (j *jamfClient) GetMobileDevices() ([]Device, error) {
 	j.logger.Debug("Getting all iOS devices")
 
-	resp, err := j.client.GetMobileDevices()
+	params := url.Values{}
+	params.Set("page-size", "5000")
+	params.Set("section", "GENERAL")
+	params.Add("section", "USER_AND_LOCATION")
+	params.Set("filter", "managed==true")
+
+	resp, err := j.client.GetMobileDevicesInventory(params)
 	if err != nil {
 		j.logger.Error("Error getting iOS device list", "error", err)
 		return nil, fmt.Errorf("failed to get iOS device list: %w", err)
 	}
 
-	var devicesToProbe []int
 	var devices []Device
-	for i := 0; i < len(resp.MobileDevices); i++ {
-		deviceResp := resp.MobileDevices[i]
-		if !deviceResp.Managed {
-			j.logger.Debug("Device not managed, skipping over", "device", deviceResp.Name)
-		}
-		if deviceResp.Username == "" {
-			j.logger.Info("No user associated with device, skipping over", "device", deviceResp.Name)
-		}
-		devicesToProbe = append(devicesToProbe, deviceResp.ID)
-	}
-
-	for i := 0; i < len(devicesToProbe); i++ {
-		resp, err := j.client.GetMobileDeviceByID(string(devicesToProbe[i]))
-		if err != nil {
-			j.logger.Error("Error getting details for iOS device", "deviceID", devicesToProbe[i], "error", err)
+	for i := 0; i < len(resp.Results); i++ {
+		deviceResp := resp.Results[i]
+		if *deviceResp.UserAndLocation.Username == "" {
+			j.logger.Debug("No user assocaited with device, skipping over", "device", *deviceResp.General.DisplayName)
 			continue
 		}
 
-		jamfUser, err := j.ldapClient.CreateUserFromMobileDevice(
-			resp.Location.Username,
-			resp.Location.Building,
-			resp.Location.Department,
-			resp.Location.RealName,
-			resp.Location.EmailAddress,
+		jamfUser, err := j.ldapClient.CreateUserFromJamf(
+			deviceResp.UserAndLocation.Username,
+			deviceResp.UserAndLocation.BuildingID,
+			deviceResp.UserAndLocation.DepartmentID,
+			deviceResp.UserAndLocation.RealName,
+			deviceResp.UserAndLocation.EmailAddress,
 		)
 		if err != nil {
-			j.logger.Error("Error checking device", "device", resp.General.Name, "error", err)
+			j.logger.Error("Unable to check device", "device", *deviceResp.General.DisplayName, "error", err)
+			continue
 		}
 
-		ldapDetails, err := j.ldapClient.GetUserInfo(resp.Location.Username)
+		ldapDetails, err := j.ldapClient.GetUserInfo(*deviceResp.UserAndLocation.Username)
 		if err != nil {
-			j.logger.Error("Error getting details from Active Directory for user", "user", resp.Location.Username)
+			j.logger.Warn("Unable to get details from Active Directory for user", "user", *deviceResp.UserAndLocation.Username)
 			continue
 		}
 
 		device := Device{
-			ID:         string(resp.General.ID),
+			ID:         *deviceResp.MobileDeviceID,
 			DeviceType: "iOS",
-			Name:       resp.General.Name,
+			Name:       *deviceResp.General.DisplayName,
 			JamfUser:   jamfUser,
 			LDAPUser:   ldapDetails,
 		}
@@ -183,8 +233,8 @@ func (j *jamfClient) GetMobileDevices() ([]Device, error) {
 func (j *jamfClient) UpdateComputer(device *Device, dryRun bool) error {
 	if !dryRun {
 		payload := jamfpro.ResourceComputerInventory{
-			UserAndLocation: jamfpro.ComputerInventorySubsetUserAndLocation{
-				Username:     device.LDAPUser.Username,
+			UserAndLocation: &jamfpro.ComputerInventorySubsetUserAndLocation{
+				Username:     &device.LDAPUser.Username,
 				Realname:     device.LDAPUser.RealName,
 				Email:        device.LDAPUser.Email,
 				DepartmentId: device.LDAPUser.DepartmentID,
@@ -196,28 +246,28 @@ func (j *jamfClient) UpdateComputer(device *Device, dryRun bool) error {
 			return fmt.Errorf("failed to update computer info: %w", err)
 		}
 	}
-	j.logger.Info("Updated user and location information", "device", device.Name, "user", device.LDAPUser.Username, "building", device.LDAPUser.Building, "department", device.LDAPUser.Department)
+	j.logger.Info("Updated user and location information", "device", device.Name, "user", device.LDAPUser.Username, "oldBuilding", device.JamfUser.Building, "oldDepartment", device.JamfUser.Department, "building", device.LDAPUser.Building, "department", device.LDAPUser.Department)
 	return nil
 }
 
 func (j *jamfClient) UpdateMobileDevice(device *Device, dryRun bool) error {
 	if !dryRun {
-		payload := jamfpro.ResourceMobileDevice{
-			Location: jamfpro.MobileDeviceSubsetLocation{
-				Username:     device.LDAPUser.Username,
+		payload := jamfpro.UpdateMobileDeviceInventory{
+			Location: &jamfpro.MobileDeviceInventorySubsetUserAndLocation{
+				Username:     &device.LDAPUser.Username,
 				RealName:     device.LDAPUser.RealName,
 				EmailAddress: device.LDAPUser.Email,
-				Department:   device.LDAPUser.Department,
-				Building:     device.LDAPUser.Building,
+				DepartmentID: device.LDAPUser.DepartmentID,
+				BuildingID:   device.LDAPUser.BuildingID,
 			},
 		}
-		_, err := j.client.UpdateMobileDeviceByID(device.ID, &payload)
+		_, err := j.client.UpdateMobileDeviceInventoryByID(device.ID, &payload)
 		if err != nil {
 			return fmt.Errorf("failed to update mobile device info: %w", err)
 		}
 	}
 
-	j.logger.Info("Updated user and location information", "device", device.Name, "user", device.LDAPUser.Username, "building", device.LDAPUser.Building, "department", device.LDAPUser.Department)
+	j.logger.Info("Updated user and location information", "device", device.Name, "user", device.LDAPUser.Username, "oldBuilding", device.JamfUser.Building, "oldDepartment", device.JamfUser.Department, "building", device.LDAPUser.Building, "department", device.LDAPUser.Department)
 	return nil
 }
 
@@ -226,5 +276,5 @@ func (j *jamfClient) Close() error {
 }
 
 func (d *Device) NeedsToUpdate() bool {
-	return d.JamfUser.Equals(d.LDAPUser)
+	return !d.JamfUser.Equals(d.LDAPUser)
 }
