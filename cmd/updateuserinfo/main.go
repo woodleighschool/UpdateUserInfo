@@ -126,7 +126,7 @@ func runSync() error {
 
 	}
 
-	jamfClient, err := jamf.NewClient(cfg, cfg.LogLevel, logger, ldapClient)
+	jamfClient, err := jamf.NewClient(cfg, logger, ldapClient)
 	if err != nil {
 
 	}

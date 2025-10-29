@@ -36,7 +36,7 @@ type jamfClient struct {
 	logger     *slog.Logger
 }
 
-func NewClient(cfg *config.Config, logLevel string, logger *slog.Logger, ldapClient *user.LDAPClient) (Client, error) {
+func NewClient(cfg *config.Config, logger *slog.Logger, ldapClient *user.LDAPClient) (Client, error) {
 	if err := os.Setenv("INSTANCE_DOMAIN", cfg.InstanceDomain); err != nil {
 		return nil, fmt.Errorf("failed to set INSTANCE_DOMAIN environment variable: %w", err)
 	}
